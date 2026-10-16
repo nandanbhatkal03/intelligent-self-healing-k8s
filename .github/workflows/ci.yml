@@ -1,0 +1,87 @@
+# Continuous integration (Phase B4, Objective 1).
+# Runs on every push and pull request. It checks what can be checked
+# without a cluster: unit tests, lint, the app image build, and the
+# infrastructure code. Fault-injection experiments still run on the laptop.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  platform:
+    name: Platform tests (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: platform/pyproject.toml
+      - name: Install selfheal with dev tools
+        run: pip install -e 'platform[dev]'
+      - name: Lint (ruff)
+        run: ruff check --config ruff.toml platform/selfheal platform/tests apps/shoplite deploy/loadgen
+      - name: Unit tests
+        working-directory: platform
+        run: python -m unittest discover -s tests -t . -v
+
+  shell:
+    name: Shell scripts (shellcheck)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck (preinstalled on the runner)
+        run: shellcheck -x -S warning scripts/*.sh
+
+  image:
+    name: ShopLite image build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build (includes the import check for every service role)
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/shoplite
+          push: false
+          provenance: false
+          tags: shoplite:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  infra:
+    name: Infrastructure as code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - name: terraform fmt
+        run: terraform -chdir=infra/terraform fmt -check -recursive -diff
+      - name: terraform init (no backend) and validate
+        run: |
+          terraform -chdir=infra/terraform init -backend=false -input=false
+          terraform -chdir=infra/terraform validate
+      - uses: azure/setup-helm@v4
+      - name: helm lint (local Jaeger chart)
+        run: helm lint deploy/observability/charts/jaeger
+      - name: Ansible playbook syntax
+        run: |
+          pip install --quiet ansible-core
+          ansible-playbook --syntax-check -i localhost, infra/ansible/site.yml

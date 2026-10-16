@@ -1,0 +1,79 @@
+# kube-prometheus-stack values for the local Kind evaluation cluster.
+# FR-1.1 (15s scrape), FR-1.5 (Grafana), FR-1.6 (7-day retention).
+fullnameOverride: kps
+
+# Kind runs these control-plane components bound to 127.0.0.1, so Prometheus
+# cannot scrape them; disabling avoids permanently-firing "target down" alerts.
+kubeControllerManager: { enabled: false }
+kubeScheduler:         { enabled: false }
+kubeEtcd:              { enabled: false }
+kubeProxy:             { enabled: false }
+
+prometheus:
+  prometheusSpec:
+    scrapeInterval: 15s              # FR-1.1 default; change here (NFR-9)
+    evaluationInterval: 15s
+    retention: 7d                    # FR-1.6
+    retentionSize: 8GB
+    # Accept OTLP-derived metrics pushed by the OpenTelemetry Collector (FR-1.4)
+    enableRemoteWriteReceiver: true
+    # Pick up ServiceMonitors / PodMonitors / Probes from every namespace,
+    # not only the ones labelled for this Helm release.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    resources:
+      requests: { cpu: 200m, memory: 512Mi }
+      limits:   { memory: 2Gi }
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources: { requests: { storage: 10Gi } }
+
+alertmanager:
+  alertmanagerSpec:
+    resources:
+      requests: { cpu: 20m, memory: 64Mi }
+
+grafana:
+  adminPassword: selfheal            # local cluster only
+  defaultDashboardsTimezone: browser
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      searchNamespace: ALL
+  additionalDataSources:
+    - name: Loki
+      uid: loki
+      type: loki
+      access: proxy
+      url: http://loki.observability.svc:3100
+      jsonData:
+        derivedFields:
+          # click a trace_id in a log line -> open the trace in Jaeger
+          - name: TraceID
+            matcherRegex: '"trace_id":\s*"(\w+)"'
+            url: "$${__value.raw}"
+            datasourceUid: jaeger
+    - name: Jaeger
+      uid: jaeger
+      type: jaeger
+      access: proxy
+      url: http://jaeger.observability.svc:16686
+      jsonData:
+        tracesToLogsV2:
+          datasourceUid: loki
+          filterByTraceID: true
+          spanStartTimeShift: "-5m"
+          spanEndTimeShift: "5m"
+
+prometheus-node-exporter:
+  resources:
+    requests: { cpu: 10m, memory: 32Mi }
+
+kube-state-metrics:
+  resources:
+    requests: { cpu: 10m, memory: 64Mi }

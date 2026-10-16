@@ -1,0 +1,44 @@
+# Least-privilege identity for the remediation controller (NFR-5).
+# It may only do what FR-4.1 lists — restart pods, scale and roll back
+# Deployments — and only inside the monitored namespace.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: selfheal-controller
+  namespace: selfheal
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: selfheal-remediator
+  namespace: shoplite
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, watch, delete]          # restart pod
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get, list, watch, patch]           # rollback (patch template)
+  - apiGroups: [apps]
+    resources: [deployments/scale]
+    verbs: [get, patch, update]                # scale deployment
+  - apiGroups: [apps]
+    resources: [replicasets]
+    verbs: [get, list, watch]                  # find previous revision
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [create, patch]                     # audit trail visible in kubectl
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: selfheal-remediator
+  namespace: shoplite
+subjects:
+  - kind: ServiceAccount
+    name: selfheal-controller
+    namespace: selfheal
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: selfheal-remediator

@@ -1,0 +1,15 @@
+# Blackbox exporter: probes the ShopLite frontend from *outside* the app,
+# the way a user would. probe_success is the SLI behind Availability and
+# MTTR (FR-6.1) — it stays truthful even when every app pod is dead and the
+# app's own metrics have disappeared.
+fullnameOverride: blackbox
+config:
+  modules:
+    http_2xx:
+      prober: http
+      timeout: 4s
+      http:
+        valid_status_codes: [200]
+        preferred_ip_protocol: ip4
+resources:
+  requests: { cpu: 10m, memory: 32Mi }

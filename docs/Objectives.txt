@@ -1,0 +1,11 @@
+Semester 3 — Project-I
+
+[1] System Architecture & Environment Setup — To design a modular system architecture and establish a containerized Kubernetes environment (Docker, Kubernetes, Terraform, Ansible) that provides a reproducible foundation for integrating the observability, anomaly detection, and remediation components.
+[2] AI-Driven Observability Framework — To design and develop an observability framework that continuously collects and correlates metrics, logs, traces, and cluster events to detect and classify abnormal system behaviour and potential failures in real time.
+[3] Fault-Injection & Evaluation Testbed — To design a controlled chaos-engineering testbed on Kubernetes to systematically induce pod crashes, memory leaks, CPU spikes, and network bottlenecks, and establish baseline MTTD, MTTR, and availability metrics.
+
+Semester 4 — Project-II
+
+[4] ML-Based Predictive Failure Analysis — To develop a machine-learning-based predictive analytics mechanism that models temporal trends in resource and performance metrics to identify early-warning patterns of impending failures, enabling proactive intervention before degradation or downtime.
+[5] Policy-Driven Automated Remediation — To implement a policy-driven remediation engine that maps detected anomalies to self-healing actions (pod restart, deployment scaling, release rollback) and evaluate its effectiveness in reducing MTTD and MTTR.
+[6] Comparative Evaluation — To comparatively evaluate the proposed platform against Kubernetes-native self-healing and existing alternatives (e.g., K8sGPT), quantifying gains in detection accuracy, MTTR, MTBF, and availability.

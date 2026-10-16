@@ -1,0 +1,7 @@
+# Copy to terraform.tfvars to override defaults.
+# worker_count = 2
+# node_image   = "kindest/node:v1.31.0"
+# chart_versions = {
+#   kube_prometheus_stack = "65.1.1"
+#   loki                  = "6.16.0"
+# }

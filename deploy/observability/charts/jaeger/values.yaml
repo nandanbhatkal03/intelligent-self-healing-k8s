@@ -1,0 +1,4 @@
+image: jaegertracing/jaeger:2.5.0
+resources:
+  requests: { cpu: 50m, memory: 128Mi }
+  limits:   { memory: 768Mi }

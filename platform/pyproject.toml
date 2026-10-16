@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "selfheal"
+version = "0.1.0"
+description = "AI-driven observability and automated remediation for Kubernetes (classical ML, no LLM in the loop)"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.26",
+  "pandas>=2.1",
+  "scikit-learn>=1.4",
+  "joblib>=1.3",
+  "httpx>=0.27",
+  "PyYAML>=6.0",
+  "kubernetes>=29.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff==0.15.11"]  # pinned: same lint result locally and in CI
+
+[project.scripts]
+selfheal = "selfheal.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["selfheal*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+# Editors pick this up; make lint / CI pass ../ruff.toml explicitly.
+extend = "../ruff.toml"

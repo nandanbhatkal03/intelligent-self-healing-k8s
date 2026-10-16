@@ -1,0 +1,16 @@
+# FR-5.1 "service outage": make every inventory pod unavailable for 2 min.
+# Pods stay scheduled (Chaos Mesh swaps in a pause image), so K8s-native
+# self-healing has nothing to replace — a case the baseline cannot recover.
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: service-outage
+  namespace: shoplite
+  labels: { selfheal/fault: service-outage }
+spec:
+  action: pod-failure
+  mode: all
+  duration: "120s"
+  selector:
+    namespaces: [shoplite]
+    labelSelectors: { app.kubernetes.io/name: inventory }

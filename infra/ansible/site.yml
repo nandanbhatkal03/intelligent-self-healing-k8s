@@ -1,0 +1,131 @@
+# Objective 1 — host provisioning with Ansible.
+# Prepares an Ubuntu/Debian machine (including WSL2 Ubuntu) to run the
+# testbed: Docker, kubectl, kind, helm, terraform, Python, kernel limits.
+#
+#   ansible-playbook -i infra/ansible/inventory.ini infra/ansible/site.yml -K
+#
+# Docker Desktop users (macOS / Windows): run with -e install_docker=false.
+# macOS: use Homebrew instead (see docs/setup-guide.md).
+- name: Prepare host for the self-healing Kubernetes testbed
+  hosts: testbed
+  become: true
+  vars:
+    install_docker: true
+    kubectl_version: v1.31.4
+    # Keep the kind CLI at least as new as the node image the Terraform kind
+    # provider uses; an older CLI fails `kind load` on containerd-2.x nodes.
+    kind_version: v0.30.0
+    helm_version: v3.16.3
+    terraform_version: 1.9.8
+    target_user: "{{ lookup('env', 'USER') }}"
+    arch_map: { x86_64: amd64, aarch64: arm64, arm64: arm64 }
+    arch: "{{ arch_map[ansible_architecture] }}"
+
+  tasks:
+    - name: Only Debian-family hosts are supported by this playbook
+      ansible.builtin.assert:
+        that: ansible_os_family == "Debian"
+        fail_msg: "Use Homebrew on macOS (docs/setup-guide.md); this playbook targets Ubuntu/Debian/WSL2."
+
+    - name: Base packages
+      ansible.builtin.apt:
+        name: [ca-certificates, curl, gnupg, git, make, unzip, python3, python3-venv, python3-pip]
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    # ------------------------------------------------------------- Docker
+    - name: Docker
+      when: install_docker | bool
+      block:
+        - name: Keyring directory
+          ansible.builtin.file: { path: /etc/apt/keyrings, state: directory, mode: "0755" }
+        - name: Docker apt key
+          ansible.builtin.get_url:
+            url: "https://download.docker.com/linux/{{ ansible_distribution | lower }}/gpg"
+            dest: /etc/apt/keyrings/docker.asc
+            mode: "0644"
+        - name: Docker apt repository
+          ansible.builtin.apt_repository:
+            repo: >-
+              deb [arch={{ arch }} signed-by=/etc/apt/keyrings/docker.asc]
+              https://download.docker.com/linux/{{ ansible_distribution | lower }}
+              {{ ansible_distribution_release }} stable
+            filename: docker
+        - name: Docker Engine
+          ansible.builtin.apt:
+            name: [docker-ce, docker-ce-cli, containerd.io, docker-buildx-plugin]
+            state: present
+            update_cache: true
+        - name: Docker service running (systemd hosts)
+          ansible.builtin.service: { name: docker, state: started, enabled: true }
+          when: ansible_service_mgr == "systemd"
+        - name: "Allow {{ target_user }} to use Docker without sudo"
+          ansible.builtin.user: { name: "{{ target_user }}", groups: docker, append: true }
+
+    # ------------------------------------------------------ CLI binaries
+    - name: kubectl
+      ansible.builtin.get_url:
+        url: "https://dl.k8s.io/release/{{ kubectl_version }}/bin/linux/{{ arch }}/kubectl"
+        dest: /usr/local/bin/kubectl
+        mode: "0755"
+
+    - name: kind
+      ansible.builtin.get_url:
+        url: "https://kind.sigs.k8s.io/dl/{{ kind_version }}/kind-linux-{{ arch }}"
+        dest: /usr/local/bin/kind
+        mode: "0755"
+
+    - name: helm (download + unpack)
+      ansible.builtin.unarchive:
+        src: "https://get.helm.sh/helm-{{ helm_version }}-linux-{{ arch }}.tar.gz"
+        dest: /tmp
+        remote_src: true
+        creates: "/tmp/linux-{{ arch }}/helm"
+    - name: helm (install)
+      ansible.builtin.copy:
+        src: "/tmp/linux-{{ arch }}/helm"
+        dest: /usr/local/bin/helm
+        mode: "0755"
+        remote_src: true
+
+    - name: terraform
+      ansible.builtin.unarchive:
+        src: "https://releases.hashicorp.com/terraform/{{ terraform_version }}/terraform_{{ terraform_version }}_linux_{{ arch }}.zip"
+        dest: /usr/local/bin
+        remote_src: true
+        mode: "0755"
+
+    # ---------------------------------------------------- kernel limits
+    - name: inotify limits recommended by kind for multi-node clusters
+      ansible.builtin.copy:
+        dest: /etc/sysctl.d/99-kind.conf
+        content: |
+          fs.inotify.max_user_watches = 524288
+          fs.inotify.max_user_instances = 512
+        mode: "0644"
+      notify: Reload sysctl
+
+    # ------------------------------------------------------------ verify
+    - name: Tool versions
+      ansible.builtin.command: "{{ item }}"
+      loop:
+        - kubectl version --client
+        - kind version
+        - helm version --short
+        - terraform version
+      register: versions
+      changed_when: false
+
+    - name: Report
+      ansible.builtin.debug:
+        msg: "{{ versions.results | map(attribute='stdout_lines') | map('first') | list }}"
+
+    - name: Reminder
+      ansible.builtin.debug:
+        msg: "Log out and back in (or run `newgrp docker`) so the docker group applies, then: make up"
+
+  handlers:
+    - name: Reload sysctl
+      ansible.builtin.command: sysctl --system
+      changed_when: true

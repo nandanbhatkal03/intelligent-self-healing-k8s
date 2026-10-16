@@ -1,0 +1,6 @@
+apiVersion: v2
+name: jaeger
+description: Jaeger v2 all-in-one (in-memory) for the selfheal testbed. Local chart so Terraform and the scripts install it the same way as everything else.
+type: application
+version: 0.1.0
+appVersion: "2.5.0"

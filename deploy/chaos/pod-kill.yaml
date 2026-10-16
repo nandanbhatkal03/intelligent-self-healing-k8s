@@ -1,0 +1,14 @@
+# FR-5.1 "pod crash": kill one inventory pod. One-shot (no duration).
+# K8s-native baseline: the ReplicaSet replaces it; measures native recovery time.
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: pod-kill
+  namespace: shoplite
+  labels: { selfheal/fault: pod-crash }
+spec:
+  action: pod-kill
+  mode: one
+  selector:
+    namespaces: [shoplite]
+    labelSelectors: { app.kubernetes.io/name: inventory }

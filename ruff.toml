@@ -1,0 +1,10 @@
+# One lint configuration for the whole repo (make lint, make ci, GitHub Actions).
+# Passed explicitly with --config, so personal or global ruff settings on a
+# developer machine cannot change the result.
+line-length = 120
+target-version = "py310"
+src = ["platform", "apps/shoplite"]
+
+[lint]
+# pycodestyle, pyflakes, import order, pyupgrade, bugbear
+select = ["E", "F", "W", "I", "UP", "B"]

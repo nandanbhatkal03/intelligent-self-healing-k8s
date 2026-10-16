@@ -1,0 +1,26 @@
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+.port-forward.pids
+.port-forward-logs/
+platform/logs/
+platform/reports/
+platform/data/*.csv
+platform/models/*.joblib
+.DS_Store
+.idea/
+.vscode/
+# Terraform
+infra/terraform/.terraform/
+infra/terraform/.terraform.lock.hcl
+infra/terraform/terraform.tfstate*
+infra/terraform/.terraform.tfstate.lock.info
+# Never publish credentials or third-party papers
+*.kubeconfig
+kubeconfig*
+.env
+*.pem
+*.key
+literature/
+papers/

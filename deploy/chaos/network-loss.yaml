@@ -1,0 +1,18 @@
+# FR-5.1 "network bottleneck" (lossy variant): 30% packet loss to orders.
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: network-loss
+  namespace: shoplite
+  labels: { selfheal/fault: network-bottleneck }
+spec:
+  action: loss
+  mode: all
+  duration: "180s"
+  selector:
+    namespaces: [shoplite]
+    labelSelectors: { app.kubernetes.io/name: orders }
+  loss:
+    loss: "30"
+    correlation: "25"
+  direction: to

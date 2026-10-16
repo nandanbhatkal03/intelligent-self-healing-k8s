@@ -1,0 +1,30 @@
+# Prometheus scrape config for the app (FR-1.1) and the external
+# availability probe that defines "up" for Availability/MTTR (FR-6.1).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: shoplite
+  labels: { app.kubernetes.io/part-of: shoplite }
+spec:
+  selector:
+    matchLabels: { selfheal/scrape: "true" }
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: shoplite-availability
+  labels: { app.kubernetes.io/part-of: shoplite }
+spec:
+  interval: 5s            # finer than scrape interval: MTTR resolution is bounded by this
+  module: http_2xx
+  prober:
+    url: blackbox.monitoring.svc:9115
+  targets:
+    staticConfig:
+      # /api/products exercises frontend -> inventory -> redis end to end
+      static: ["http://frontend.shoplite.svc:8000/api/products"]
+      labels: { service: frontend }

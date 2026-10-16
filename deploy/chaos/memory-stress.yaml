@@ -1,0 +1,20 @@
+# FR-5.1 "memory pressure": allocate ~200 MB inside one orders pod
+# (limit is 256Mi), pushing it toward OOMKill. For a *gradual* leak with a
+# trend the predictor can forecast, use the app-level fault instead:
+#   scripts/app-fault.sh orders memory_leak '{"mb_per_sec": 2}'
+apiVersion: chaos-mesh.org/v1alpha1
+kind: StressChaos
+metadata:
+  name: memory-stress
+  namespace: shoplite
+  labels: { selfheal/fault: memory-pressure }
+spec:
+  mode: one
+  duration: "180s"
+  selector:
+    namespaces: [shoplite]
+    labelSelectors: { app.kubernetes.io/name: orders }
+  stressors:
+    memory:
+      workers: 1
+      size: "200MB"

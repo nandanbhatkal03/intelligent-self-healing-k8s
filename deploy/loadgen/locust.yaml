@@ -1,0 +1,48 @@
+# Locust load generator (the tool Matsuo & Ikegami used for load faults).
+# Runs with its web UI on :8089 and starts the DiurnalShape automatically.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: locust
+  labels:
+    app.kubernetes.io/name: locust
+    app.kubernetes.io/part-of: shoplite-loadgen
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: locust }
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: locust
+        app.kubernetes.io/part-of: shoplite-loadgen
+    spec:
+      containers:
+        - name: locust
+          image: locustio/locust:2.29.1
+          args:
+            - -f
+            - /mnt/locust/locustfile.py
+            - --host
+            - http://frontend.shoplite.svc:8000
+            - --autostart
+          ports:
+            - { name: web, containerPort: 8089 }
+          volumeMounts:
+            - { name: locustfile, mountPath: /mnt/locust }
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits:   { cpu: "1", memory: 512Mi }
+      volumes:
+        - name: locustfile
+          configMap: { name: locustfile }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: locust
+  labels: { app.kubernetes.io/name: locust }
+spec:
+  selector: { app.kubernetes.io/name: locust }
+  ports:
+    - { name: web, port: 8089, targetPort: web }

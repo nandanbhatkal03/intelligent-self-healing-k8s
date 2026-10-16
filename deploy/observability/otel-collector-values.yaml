@@ -1,0 +1,63 @@
+# OpenTelemetry Collector — the single telemetry pipeline (FR-1.4).
+#
+#   app (OTLP traces) ─┐
+#   pod stdout (files) ├─> collector ─┬─> Jaeger      (traces)
+#   app (OTLP metrics) ┘              ├─> Loki /otlp  (logs)
+#                                     └─> Prometheus  (remote-write, OTLP metrics)
+#
+# Container/node resource metrics are still scraped by Prometheus directly
+# (cAdvisor, kube-state-metrics, node-exporter) — that is the standard,
+# lowest-overhead path and keeps NFR-2 (≤10% CPU overhead) achievable.
+fullnameOverride: otel-collector
+mode: daemonset
+
+image:
+  repository: otel/opentelemetry-collector-contrib
+
+presets:
+  logsCollection:            # tail /var/log/pods/* on every node
+    enabled: true
+    includeCollectorLogs: false
+  kubernetesAttributes:      # add k8s.namespace.name, k8s.pod.name, k8s.deployment.name...
+    enabled: true
+
+service:
+  enabled: true              # DaemonSets get no Service by default; apps need one
+
+resources:
+  requests: { cpu: 50m, memory: 128Mi }
+  limits:   { memory: 512Mi }
+
+config:
+  exporters:
+    otlp/jaeger:
+      endpoint: jaeger.observability.svc:4317
+      tls: { insecure: true }
+    otlphttp/loki:
+      endpoint: http://loki.observability.svc:3100/otlp
+    prometheusremotewrite:
+      endpoint: http://kps-prometheus.monitoring.svc:9090/api/v1/write
+      resource_to_telemetry_conversion: { enabled: true }
+  processors:
+    batch: {}
+    memory_limiter:
+      check_interval: 5s
+      limit_percentage: 80
+      spike_limit_percentage: 25
+  # NOTE: the presets above inject `filelog` into the logs receivers and
+  # `k8sattributes` into every pipeline's processors — don't list them here
+  # too, or the collector rejects the duplicate.
+  service:
+    pipelines:
+      traces:
+        receivers:  [otlp]
+        processors: [memory_limiter, batch]
+        exporters:  [otlp/jaeger]
+      logs:
+        receivers:  [otlp]
+        processors: [memory_limiter, batch]
+        exporters:  [otlphttp/loki]
+      metrics:
+        receivers:  [otlp]
+        processors: [memory_limiter, batch]
+        exporters:  [prometheusremotewrite]

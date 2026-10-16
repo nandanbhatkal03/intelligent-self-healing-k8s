@@ -1,0 +1,71 @@
+# Baseline detection for Objective 3: what "traditional monitoring" does
+# today (Problem Statement, slide 3: monitoring stacks raise alerts, a human
+# acts). Static thresholds with the usual `for:` hold-downs.
+#
+# Baseline MTTD = fault injection -> first ShopLite alert firing.
+# The ML detector's MTTD is compared against this in Objective 6.
+# Every alert carries namespace=shoplite so `selfheal report` can find it
+# in the ALERTS series.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: shoplite-baseline-alerts
+  labels: { app.kubernetes.io/part-of: shoplite }
+spec:
+  groups:
+    - name: shoplite-baseline
+      interval: 15s
+      rules:
+        - alert: ShopLiteProbeDown
+          expr: min(probe_success{job=~".*shoplite-availability.*"}) == 0
+          for: 30s
+          labels: { severity: critical, namespace: shoplite }
+          annotations: { summary: "ShopLite end-to-end probe failing" }
+
+        - alert: ShopLiteReplicasUnavailable
+          expr: |
+            kube_deployment_status_replicas_available{namespace="shoplite"}
+              < kube_deployment_spec_replicas{namespace="shoplite"}
+          for: 1m
+          labels: { severity: warning, namespace: shoplite }
+          annotations: { summary: "{{ $labels.deployment }} has unavailable replicas" }
+
+        - alert: ShopLitePodRestarted
+          expr: increase(kube_pod_container_status_restarts_total{namespace="shoplite"}[5m]) > 0
+          labels: { severity: warning, namespace: shoplite }
+          annotations: { summary: "{{ $labels.pod }} restarted" }
+
+        - alert: ShopLiteHighErrorRate
+          expr: |
+            sum by (service) (rate(http_requests_total{namespace="shoplite",status=~"5.."}[1m]))
+              / clamp_min(sum by (service) (rate(http_requests_total{namespace="shoplite"}[1m])), 1e-9)
+              > 0.05
+          for: 1m
+          labels: { severity: warning, namespace: shoplite }
+          annotations: { summary: "{{ $labels.service }} 5xx ratio above 5%" }
+
+        - alert: ShopLiteHighLatency
+          expr: |
+            histogram_quantile(0.95, sum by (service, le)
+              (rate(http_request_duration_seconds_bucket{namespace="shoplite"}[1m]))) > 1
+          for: 1m
+          labels: { severity: warning, namespace: shoplite }
+          annotations: { summary: "{{ $labels.service }} p95 latency above 1s" }
+
+        - alert: ShopLiteMemoryNearLimit
+          expr: |
+            max by (pod) (container_memory_working_set_bytes{namespace="shoplite",container!="",container!="POD"}
+              / on(namespace, pod, container) kube_pod_container_resource_limits{namespace="shoplite",resource="memory"})
+              > 0.9
+          for: 1m
+          labels: { severity: warning, namespace: shoplite }
+          annotations: { summary: "{{ $labels.pod }} memory above 90% of limit" }
+
+        - alert: ShopLiteCPUSaturated
+          expr: |
+            sum by (pod) (rate(container_cpu_usage_seconds_total{namespace="shoplite",container!="",container!="POD"}[1m]))
+              / sum by (pod) (kube_pod_container_resource_limits{namespace="shoplite",resource="cpu"})
+              > 0.9
+          for: 1m
+          labels: { severity: warning, namespace: shoplite }
+          annotations: { summary: "{{ $labels.pod }} CPU above 90% of limit" }

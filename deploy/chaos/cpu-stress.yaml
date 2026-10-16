@@ -1,0 +1,17 @@
+# FR-5.1 "CPU spike": saturate the orders pods' CPU for 3 min.
+apiVersion: chaos-mesh.org/v1alpha1
+kind: StressChaos
+metadata:
+  name: cpu-stress
+  namespace: shoplite
+  labels: { selfheal/fault: cpu-spike }
+spec:
+  mode: all
+  duration: "180s"
+  selector:
+    namespaces: [shoplite]
+    labelSelectors: { app.kubernetes.io/name: orders }
+  stressors:
+    cpu:
+      workers: 2
+      load: 100

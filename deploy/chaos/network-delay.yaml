@@ -1,0 +1,19 @@
+# FR-5.1 "network bottleneck": 300 ms ± 50 ms latency on inventory traffic.
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: network-delay
+  namespace: shoplite
+  labels: { selfheal/fault: network-bottleneck }
+spec:
+  action: delay
+  mode: all
+  duration: "180s"
+  selector:
+    namespaces: [shoplite]
+    labelSelectors: { app.kubernetes.io/name: inventory }
+  delay:
+    latency: "300ms"
+    jitter: "50ms"
+    correlation: "25"
+  direction: to

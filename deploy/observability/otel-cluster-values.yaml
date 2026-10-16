@@ -1,0 +1,38 @@
+# Second OpenTelemetry Collector: one replica (Deployment, not DaemonSet,
+# so each event is collected exactly once) watching Kubernetes *events*:
+# OOMKilling, BackOff, Unhealthy, FailedScheduling, Killing, ...
+# Objective 2 asks for "metrics, logs, traces, and cluster events".
+#
+# Events land in Loki as JSON log lines under service_name="k8s-events":
+#   {service_name="k8s-events"} | json | object_type="Warning"
+#     | object_regarding_namespace="shoplite"
+fullnameOverride: otel-cluster
+mode: deployment
+replicaCount: 1
+
+image:
+  repository: otel/opentelemetry-collector-contrib
+
+presets:
+  kubernetesEvents:          # k8sobjects receiver: watch events.k8s.io/v1 Events (+ RBAC)
+    enabled: true
+
+resources:
+  requests: { cpu: 20m, memory: 64Mi }
+  limits:   { memory: 256Mi }
+
+config:
+  exporters:
+    otlphttp/loki:
+      endpoint: http://loki.observability.svc:3100/otlp
+  processors:
+    batch: {}
+    resource/events:
+      attributes:
+        - { key: service.name, value: k8s-events, action: upsert }
+  service:
+    pipelines:
+      logs:                  # the preset adds the k8sobjects receiver here
+        receivers:  [otlp]
+        processors: [resource/events, batch]
+        exporters:  [otlphttp/loki]

@@ -1,0 +1,87 @@
+# selfheal platform configuration.
+# Stages follow the project objectives: Semester 3 runs observe -> detect ->
+# classify (Objective 2). Prediction (Objective 4) and remediation
+# (Objective 5) are present but switched off until Semester 4.
+# Everything here is read at start-up and can be changed without code
+# changes or rebuilding images (NFR-9). Env overrides:
+#   SELFHEAL_PROMETHEUS_URL, SELFHEAL_LOKI_URL, SELFHEAL_REMEDIATION_MODE
+
+prometheus:
+  url: http://localhost:9090        # via scripts/port-forward.sh
+loki:
+  url: http://localhost:3100
+
+target:
+  namespace: shoplite
+  deployments: [frontend, orders, inventory]
+
+detection:
+  interval_seconds: 15              # evaluation window step (= scrape interval, FR-1.1)
+  model_dir: models
+  contamination: 0.01               # IsolationForest prior on anomaly share
+  threshold_quantile: 0.995         # anomaly if score > this quantile of training scores (FR-2.3)
+  zscore_limit: 6.0                 # ...or any single feature > 6 robust std devs from normal
+  log_correlation: true             # FR-2.4: confirm metric anomalies with error logs
+  strong_score_multiplier: 1.5      # ...unless the score alone is this far above threshold
+
+prediction:                         # FR-3.x early warning — Objective 4 (Semester 4)
+  enabled: false
+  lookahead_seconds: 300            # FR-3.2 default 5 min
+  history_seconds: 600
+  min_r2: 0.6                       # ignore trends that are mostly noise
+  thresholds:
+    mem_util: 0.90
+    cpu_util: 0.90
+    error_ratio: 0.05
+    p95_latency_s: 1.0
+
+health:                             # what "recovered" means when verifying (FR-4.3)
+  min_ready_ratio: 1.0
+  max_error_ratio: 0.02
+  max_p95_latency_s: 1.0
+
+remediation:                        # Objective 5 (Semester 4)
+  # off      = observe, detect, classify only (Semester 3 default; also the
+  #            K8s-native baseline for FR-6.3)
+  # dry_run  = decide and audit actions without executing them
+  # enforce  = execute actions via the Kubernetes API
+  mode: "off"                       # quoted: bare off is boolean false in YAML
+  verify_window_seconds: 60         # FR-4.3
+  verify_poll_seconds: 5
+  recent_rollout_seconds: 900       # a rollout this recent makes "errors" look like a bad release
+  rate_limit:                       # FR-4.5
+    max_actions: 3
+    per_seconds: 600
+  escalation_webhook: ""            # Slack-compatible incoming webhook; empty = audit log only
+  policies:                         # FR-4.1 — first match wins
+    - name: bad-release
+      match: { reason: [errors, crash], recent_rollout: true }
+      action: rollback_deployment
+    - name: crash-loop              # K8s already restarts crashed pods; a human must look
+      match: { reason: crash }
+      action: alert_only
+    - name: memory
+      match: { reason: memory }
+      action: restart_pod
+    - name: cpu-saturation
+      match: { reason: cpu }
+      action: scale_deployment
+      params: { step: 1, max_replicas: 5 }
+    - name: latency
+      match: { reason: latency }
+      action: scale_deployment
+      params: { step: 1, max_replicas: 5 }
+    - name: errors
+      match: { reason: errors }
+      action: restart_pod
+    - name: unavailable
+      match: { reason: unavailable }
+      action: restart_pod
+    - name: default
+      match: {}
+      action: alert_only
+
+paths:
+  audit_log: logs/audit.jsonl       # FR-2.5, FR-4.6, NFR-6
+  experiments_log: logs/experiments.jsonl   # FR-5.2
+  pause_flag: logs/PAUSED           # `selfheal pause` creates it (SRS §3.1 manual override)
