@@ -195,6 +195,28 @@ def cmd_status(cfg, args) -> int:
     return 0
 
 
+def cmd_detections(cfg, args) -> int:
+    """Compact table of anomaly detections for the C4 evidence table:
+    time, deployment, trigger, class, basis, score/threshold."""
+    from .remediation.audit import AuditLog
+    since = time.time() - args.minutes * 60 if args.minutes else 0
+    rows = [e for e in AuditLog(cfg.path(cfg.paths.audit_log)).read()
+            if e["event"] == "detection" and e["ts"] >= since
+            and (e.get("is_anomaly") or (args.all and e.get("raw_anomaly")))]
+    if not rows:
+        print("no detections" + (f" in the last {args.minutes:g} min" if args.minutes else ""))
+        return 0
+    print(f"{'time':<8}  {'deployment':<10}  {'confirmed':<9}  {'trigger':<7}  {'class':<11}  "
+          f"{'score/thr':<11}  basis")
+    for e in rows[-args.last:]:
+        ts = time.strftime("%H:%M:%S", time.localtime(e["ts"]))
+        dep = e.get("deployment") or str(e.get("target", "")).split("/")[-1]
+        score = f"{e.get('score', 0):.3f}/{e.get('threshold', 0):.3f}"
+        print(f"{ts:<8}  {dep:<10}  {'yes' if e.get('is_anomaly') else 'no':<9}  {str(e.get('trigger')):<7}  "
+              f"{str(e.get('reason')):<11}  {score:<11}  {e.get('basis')}")
+    return 0
+
+
 def cmd_experiment(cfg, args) -> int:
     from .evaluation.experiments import Experiment, ExperimentLog, run_chaos
     elog = ExperimentLog(cfg.path(cfg.paths.experiments_log))
@@ -325,6 +347,12 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("status", help="mode, pause state and recent audit events")
     s.add_argument("--last", type=int, default=20)
     s.set_defaults(fn=cmd_status)
+
+    d = sub.add_parser("detections", help="table of anomaly detections: class, basis, trigger (Phase C4)")
+    d.add_argument("--minutes", type=float, help="only the last N minutes (default: all)")
+    d.add_argument("--last", type=int, default=30)
+    d.add_argument("--all", action="store_true", help="include anomalies not confirmed by logs")
+    d.set_defaults(fn=cmd_detections)
 
     e = sub.add_parser("experiment", help="fault-injection experiments")
     esub = e.add_subparsers(dest="action", required=True)

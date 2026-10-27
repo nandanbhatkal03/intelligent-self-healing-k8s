@@ -54,9 +54,15 @@ resume:  ## Start of session: restore node IPs, start the cluster, wait for pods
 	@scripts/cluster-resume.sh
 
 dashboards:  ## Reload Grafana dashboards from deploy/observability/dashboards (no other changes)
-	kubectl -n monitoring create configmap selfheal-dashboards \
-	  --from-file=deploy/observability/dashboards/ --dry-run=client -o yaml \
-	  | kubectl label --local -f - grafana_dashboard=1 -o yaml | kubectl apply -f -
+	@# Terraform owns the ConfigMap when the cluster was built with it; updating it any other
+	@# way makes `terraform plan` report drift ("1 to change").
+	@if [ -f infra/terraform/terraform.tfstate ] && grep -q kubernetes_config_map_v1 infra/terraform/terraform.tfstate; then \
+	  $(TF) apply -auto-approve -target=kubernetes_config_map_v1.dashboards; \
+	else \
+	  kubectl -n monitoring create configmap selfheal-dashboards \
+	    --from-file=deploy/observability/dashboards/ --dry-run=client -o yaml \
+	    | kubectl label --local -f - grafana_dashboard=1 -o yaml | kubectl apply -f -; \
+	fi
 	@echo "Grafana picks up the change within about a minute (refresh the page)."
 
 port-forward:  ## Expose Grafana :3000, Prometheus :9090, Loki :3100, Jaeger :16686, Chaos :2333, app :8080, Locust :8089

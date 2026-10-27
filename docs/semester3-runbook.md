@@ -43,7 +43,7 @@ Data does **not** need to be continuous: each 15-second window is scored on its 
 | C1 | All four signals flowing | `make smoke` (metrics, logs, events, traces, probe, dashboard) | Smoke output |
 | C2 | Correlation demo | Grafana: a log line → click `trace_id` → the Jaeger trace; Kubernetes events panel during a pod kill | Screenshots |
 | C3 | Live detection | `selfheal run` in one terminal (remediation is off by default) | — |
-| C4 | Detect and classify each fault type once | For each fault in Phase D's catalogue, check `selfheal status` shows a detection with the right `reason`: crash, memory, cpu, network/latency, unavailable | Table: fault → detected? → class → basis |
+| C4 | Detect and classify each fault type once | For each fault in Phase D's catalogue, `selfheal detections --minutes 10` shows a detection with the expected class: crash, memory, cpu, network/latency, unavailable | Table: fault → detected? → class → basis |
 | C5 | Tune if needed | Too many false alarms → raise `zscore_limit` / `threshold_quantile`; misses → lower them (`config/selfheal.yaml`) | Final values and why |
 
 ---

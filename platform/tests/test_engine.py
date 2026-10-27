@@ -102,3 +102,32 @@ class TrainingDataTest(unittest.TestCase):
             self.assertEqual(info["rows_dropped_unhealthy"], 10)
             self.assertEqual(len(data), 470)
             self.assertAlmostEqual(info["hours_covered"], 2.0, delta=0.1)
+
+
+class DetectionsCommandTest(unittest.TestCase):
+    def test_table_lists_confirmed_and_optionally_raw(self):
+        import contextlib
+        import io
+
+        from selfheal.cli import build_parser
+        cfg = load_config(DEFAULT_CONFIG)
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg.base_dir = Path(tmp)
+            audit = AuditLog(cfg.path(cfg.paths.audit_log))
+            audit.write("detection", deployment="orders", is_anomaly=True, raw_anomaly=True, trigger="zscore",
+                        reason="memory", basis="feature:mem_util z=9.1", score=0.81, threshold=0.77)
+            audit.write("detection", deployment="frontend", is_anomaly=False, raw_anomaly=True,
+                        trigger="iforest", reason="latency", basis="feature:p95_latency_s z=4.0",
+                        score=0.79, threshold=0.75)
+            audit.write("detection", deployment="inventory", is_anomaly=False, raw_anomaly=False)
+            outputs = []
+            for argv in (["detections"], ["detections", "--all"]):
+                args = build_parser().parse_args(argv)
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    self.assertEqual(args.fn(cfg, args), 0)
+                outputs.append(buf.getvalue())
+            self.assertIn("feature:mem_util z=9.1", outputs[0])
+            self.assertNotIn("frontend", outputs[0])
+            self.assertIn("frontend", outputs[1])
+            self.assertNotIn("inventory", outputs[1])
