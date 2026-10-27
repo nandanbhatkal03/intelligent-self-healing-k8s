@@ -661,7 +661,7 @@
   {
    "id": 14,
    "type": "logs",
-   "title": "ShopLite logs (Loki) \u2014 click trace_id to open the trace",
+   "title": "ShopLite logs (Loki) — click trace_id to open the trace",
    "datasource": {
     "type": "loki",
     "uid": "loki"
@@ -692,7 +692,7 @@
   {
    "id": 15,
    "type": "logs",
-   "title": "Kubernetes Warning events \u2014 shoplite (Objective 2: cluster events)",
+   "title": "Kubernetes events — shoplite (Objective 2: cluster events; Warning = problem)",
    "datasource": {
     "type": "loki",
     "uid": "loki"
@@ -710,14 +710,15 @@
       "type": "loki",
       "uid": "loki"
      },
-     "expr": "{service_name=\"k8s-events\"} | json | object_regarding_namespace=\"shoplite\" | object_type=\"Warning\" | line_format \"{{.object_reason}}  {{.object_regarding_kind}}/{{.object_regarding_name}}  {{.object_note}}\""
+     "expr": "{service_name=\"k8s-events\"} | json | object_regarding_namespace=\"shoplite\" | line_format \"{{.object_type}}  {{.object_reason}}  {{.object_regarding_kind}}/{{.object_regarding_name}}  {{.object_note}}\""
     }
    ],
    "options": {
     "showTime": true,
     "wrapLogMessage": true,
     "sortOrder": "Descending"
-   }
+   },
+   "description": "All Kubernetes events for the shoplite namespace (Normal and Warning). A quiet cluster has few events, so this panel can be empty until a pod is restarted, scaled or a fault is injected. The detector itself only uses Warning events (classification.py)."
   }
  ],
  "templating": {
