@@ -1,6 +1,6 @@
 # Intelligent Self-Healing Kubernetes Platform
 
-[![CI](https://github.com/GITHUB_USER/intelligent-self-healing-k8s/actions/workflows/ci.yml/badge.svg)](https://github.com/GITHUB_USER/intelligent-self-healing-k8s/actions/workflows/ci.yml)
+[![CI](https://github.com/nandanbhatkal03/intelligent-self-healing-k8s/actions/workflows/ci.yml/badge.svg)](https://github.com/nandanbhatkal03/intelligent-self-healing-k8s/actions/workflows/ci.yml)
 
 **AI-driven observability and automated remediation for Kubernetes, using classical ML with no LLM in the remediation loop.**
 
