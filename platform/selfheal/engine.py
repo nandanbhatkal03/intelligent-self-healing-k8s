@@ -34,6 +34,9 @@ from .remediation.models import Signal
 
 log = logging.getLogger(__name__)
 
+# Classification bases that are hard facts about the pod lifecycle (see tick()).
+HARD_FACT_BASIS = ("metric:restarts_5m=", "metric:oom_kills_5m=")
+
 METRIC_REASON = {"mem_util": "memory", "cpu_util": "cpu", "error_ratio": "errors",
                  "p95_latency_s": "latency"}
 
@@ -119,6 +122,11 @@ class Engine:
             trigger, raw = det.trigger, det.is_anomaly
             if not raw and cls.reason in EVENT_DETECTABLE and cls.basis.startswith("events:"):
                 trigger, raw = "events", True            # cluster events alone are decisive
+            elif not raw and cls.basis.startswith(HARD_FACT_BASIS):
+                # A container restart or OOM kill is never part of normal operation
+                # (training drops such windows), so one is decisive even when its
+                # z-score (1 restart / 0.5 floor = 2) is below zscore_limit.
+                trigger, raw = "metric", True
             confirmed, log_errors = raw, None
             if raw and trigger != "events" and self.cfg.detection.log_correlation:
                 confirmed, log_errors = self._corroborate(dep, cls.reason, det.score, det.threshold)

@@ -17,7 +17,7 @@ from selfheal.remediation.ratelimit import RateLimiter
 from tests.test_detection import normal_frame
 
 
-def make_prom(mem_util_orders):
+def make_prom(mem_util_orders, restarts_inventory=0.0):
     def handler(req):
         q = req.url.params["query"]
         if "kube_deployment_status_replicas_available" in q:
@@ -26,8 +26,10 @@ def make_prom(mem_util_orders):
             v = mem_util_orders if 'pod=~"orders-' in q else 0.3
         elif "error" in q or "5.." in q:
             v = 0.001
-        elif "restarts" in q:
+        elif "OOMKilled" in q:
             v = 0.0
+        elif "restarts" in q:
+            v = restarts_inventory if 'pod=~"inventory-' in q else 0.0
         else:
             v = 0.3
         return httpx.Response(200, json={"status": "success", "data": {
@@ -36,7 +38,7 @@ def make_prom(mem_util_orders):
 
 
 class EngineTest(unittest.TestCase):
-    def run_tick(self, mem, loki=None):
+    def run_tick(self, mem, loki=None, restarts=0.0):
         cfg = load_config(DEFAULT_CONFIG)
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
@@ -46,7 +48,7 @@ class EngineTest(unittest.TestCase):
                                 executor, audit, health_check=lambda n, d: True,
                                 escalate=lambda s, m: None, verify_poll_s=0, sleep=lambda s: None)
         model = AnomalyDetector().fit(normal_frame())
-        engine = Engine(cfg, make_prom(mem), loki=loki, audit=audit, controller=controller,
+        engine = Engine(cfg, make_prom(mem, restarts), loki=loki, audit=audit, controller=controller,
                         models={d: model for d in cfg.target.deployments})
         signals = engine.tick(now=1000.0)
         return signals, executor, list(audit.read())
@@ -63,6 +65,14 @@ class EngineTest(unittest.TestCase):
         det = [e for e in events if e["event"] == "detection" and e["is_anomaly"]]
         self.assertEqual(det[0]["deployment"], "orders")
         self.assertIn("action_executed", [e["event"] for e in events])
+
+    def test_single_container_restart_is_detected(self):           # C4: one container crash
+        signals, executor, events = self.run_tick(0.3, restarts=1.0)
+        self.assertEqual([(s.deployment, s.reason) for s in signals], [("inventory", "crash")])
+        det = [e for e in events if e["event"] == "detection" and e["deployment"] == "inventory"][0]
+        self.assertEqual(det["trigger"], "metric")
+        self.assertEqual(det["basis"], "metric:restarts_5m=1")
+        self.assertEqual(executor.executed, [])     # crash-loop policy = alert_only
 
     def test_crash_loop_events_alone_raise_detection(self):          # Objective 2: cluster events
         import json
