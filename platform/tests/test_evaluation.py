@@ -109,6 +109,16 @@ class ExperimentTest(unittest.TestCase):
         self.assertEqual(r["user_visible_outage_s"], 30)
         self.assertFalse(r["still_down"])
 
+    def test_analyse_stops_at_next_experiment(self):
+        """A missed fault must not borrow the next fault's detection (C4: pod-kill
+        then service-outage on the same deployment three minutes later)."""
+        exp = Experiment(fault="pod-crash", target="shoplite/inventory", mode="baseline",
+                         injected_at=100, ended_at=220)
+        audit = [{"ts": 418, "event": "detection", "is_anomaly": True, "target": "shoplite/inventory"}]
+        samples = probe("1" * 60, t0=80)
+        self.assertEqual(analyse(exp, samples, audit)["mttd_ml_s"], 318)       # old behaviour
+        self.assertIsNone(analyse(exp, samples, audit, until=398)["mttd_ml_s"])
+
 
 class BaselineTest(unittest.TestCase):
     """Objective 3: baseline MTTD, MTTR and availability."""

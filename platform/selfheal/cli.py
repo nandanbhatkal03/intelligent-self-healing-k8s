@@ -273,7 +273,9 @@ def cmd_report(cfg, args) -> int:
         f'count(ALERTS{{alertstate="firing",namespace="{ns}",alertname=~"ShopLite.*"}}) or vector(0)',
         start, end, 5)
     alerts = alert_series[0].points if alert_series else []
-    rows = [analyse(e, probe, audit, alerts) for e in exps]
+    exps.sort(key=lambda e: e.injected_at)
+    nxt = [e.injected_at for e in exps[1:]] + [None]
+    rows = [analyse(e, probe, audit, alerts, until=n) for e, n in zip(exps, nxt, strict=True)]
     summaries = {}
     if rows:
         print("\nExperiments:")

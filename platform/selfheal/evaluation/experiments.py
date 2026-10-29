@@ -111,14 +111,19 @@ def _first(events: Iterable[dict], pred) -> dict | None:
 
 
 def analyse(exp: Experiment, probe: list[tuple[float, float]], audit: list[dict],
-            alerts: list[tuple[float, float]] | None = None, horizon_s: float = 600) -> dict:
+            alerts: list[tuple[float, float]] | None = None, horizon_s: float = 600,
+            until: float | None = None) -> dict:
     """Per-experiment timings.
     probe : (ts, probe_success) samples covering the experiment
     audit : events from the selfheal audit log (ML detections, actions)
     alerts: (ts, number of firing baseline alerts) — Prometheus ALERTS
+    until : injection time of the next experiment; the window stops there so a
+            later fault's detections are never credited to this one
     """
     t0 = exp.injected_at
     t_end = (exp.ended_at or t0) + horizon_s
+    if until is not None and until > t0:
+        t_end = min(t_end, until)
     ns, _, dep = exp.target.partition("/")
 
     def in_window(e):
